@@ -49,6 +49,7 @@
   test('default example placeholder', function() {
     var postExamplesExpecteds = {
           "98103": "e.g. 98103",
+          "a1c 5M2": "e.g. a1c 5M2",
           "": ""
         },
         example;
@@ -253,6 +254,157 @@
     expect(6 + oldOptions.length - 1 + Object.keys(options).length * 2);
   });
 
+  test('empty country population', function() {
+    var $cloneAddress = this.address.clone(),
+        $emptyCountry = $cloneAddress.find('.country'),
+        oldAjax = $.ajax,
+        mockJsonData = {
+          "label": "Country",
+          "options": [
+            {
+              "label": "United States",
+              "iso": "US"
+            },
+            {
+              "label": "Canada",
+              "iso": "CA"
+            },
+            {
+              "label": "Japan",
+              "iso": "JA"
+            }
+          ]
+        },
+        expectedResponseData = $.extend(true, {}, mockJsonData);
+
+    // Init with mock inline JSON data. This should be a no-op because the <select> is already
+    // populated with options.
+    $cloneAddress.addressfield({json: mockJsonData, fields: {country: '.country'}});
+
+    strictEqual($cloneAddress.find('.country option').length, $(this.address).find('.country option').length, 'Same number of options exist as initial country select element.');
+
+    // Now empty out the cloned <select>.
+    $emptyCountry.find('option').remove();
+
+    // Init again with mock inline JSON data.
+    $cloneAddress.addressfield({json: mockJsonData, fields: {country: '.country'}});
+
+    strictEqual($emptyCountry.find('option').length, mockJsonData.options.length, 'Correct number of options appended to country select element.');
+
+    // Check that the new values match up.
+    $.each(mockJsonData.options, function(optionPos, value) {
+      strictEqual($emptyCountry.find('option[value="' + value.iso + '"]').length, 1, 'Should add new option');
+      strictEqual($emptyCountry.find('option[value="' + value.iso + '"]').text(), mockJsonData.options[optionPos]['label'], 'Should add proper label for each value');
+    });
+
+    // Test against mock ajax retrieved data.
+
+    // First. Push another option into the mock ajax repsponse to differentiate it from the mock JSON string.
+    expectedResponseData.options.push({
+      "label": "Germany",
+      "iso": "DE"
+    });
+
+    // Mock an ajax request.
+    $.ajax = function(options) {
+      options.success(expectedResponseData);
+      // Override so any real AJAX results in a no-op.
+      options.success = function() {};
+      return oldAjax(options);
+    };
+
+    // Now empty out the cloned <select> again.
+    $emptyCountry.find('option').remove();
+
+    // Init a synchronous mock ajax request.
+    $cloneAddress.addressfield({
+      json: '/foo/bar/baz.json',
+      fields: {country: '.country'},
+      async: false
+    });
+
+    strictEqual($emptyCountry.find('option').length, expectedResponseData.options.length, 'Correct number of options appended to country select element via ajax request.');
+
+    // Check that the new values match up.
+    $.each(expectedResponseData.options, function(optionPos, value) {
+      strictEqual($emptyCountry.find('option[value="' + value.iso + '"]').length, 1, 'Should add new option');
+      strictEqual($emptyCountry.find('option[value="' + value.iso + '"]').text(), expectedResponseData.options[optionPos]['label'], 'Should add proper label for each value');
+    });
+
+    // Reset methods.
+    $.ajax = oldAjax;
+
+    expect(17);
+  });
+
+  test('select a default country', function() {
+    var $cloneAddress = this.address.clone(),
+        $emptyCountry = $cloneAddress.find('.country'),
+        mockJsonData = {
+          "label": "Country",
+          "options": [
+            {
+              "label": "United States",
+              "iso": "US"
+            },
+            {
+              "label": "Canada",
+              "iso": "CA"
+            },
+            {
+              "label": "Japan",
+              "iso": "JA"
+            }
+          ]
+        };
+
+    // Remove existing countries and set the default attr to CA
+    $emptyCountry.find('option').remove().end();
+    $emptyCountry.attr("data-country-selected", "CA");
+
+
+    // Init with mock inline JSON data. This should be a no-op because the <select> is already
+    // populated with options.
+    $cloneAddress.addressfield({json: mockJsonData, fields: {country: '.country'}});
+
+    // Check the country is set to US
+    strictEqual($emptyCountry.val(), 'CA', 'Expected country to be set to CA');
+  });
+
+  test('select an invalid default country', function() {
+    var $cloneAddress = this.address.clone(),
+        $emptyCountry = $cloneAddress.find('.country'),
+        mockJsonData = {
+          "label": "Country",
+          "options": [
+            {
+              "label": "United States",
+              "iso": "US"
+            },
+            {
+              "label": "Canada",
+              "iso": "CA"
+            },
+            {
+              "label": "Japan",
+              "iso": "JA"
+            }
+          ]
+        };
+
+    // Remove existing countries and set the default attr to CA
+    $emptyCountry.find('option').remove().end();
+    $emptyCountry.attr("data-country-selected", "CAA");
+
+
+    // Init with mock inline JSON data. This should be a no-op because the <select> is already
+    // populated with options.
+    $cloneAddress.addressfield({json: mockJsonData, fields: {country: '.country'}});
+
+    // Check the country is set to US
+    strictEqual($emptyCountry.val(), 'US', 'Expected country to be set to US');
+  });
+
   test('default field hide', function() {
     // Set a value on the postal code field.
     this.postalcode.val('foo');
@@ -434,22 +586,16 @@
         },
         oldOrder = [],
         newOrder = [],
-        mockCloneData = [],
-        mockRemoveData = [],
-        oldClone = $.fn.clone,
-        oldRemove = $.fn.remove,
+        mockDetachData = [],
+        oldDetach = $.fn.detach,
         $wrapper = this.address.find('.locality');
 
-    // Override the core clone method.
-    $.fn.clone = function() {
-      mockCloneData.push('.' + $(this).find('input, select').attr('class'));
-      return oldClone.call(this);
-    };
-
-    // Override the core remove method.
-    $.fn.remove = function() {
-      mockRemoveData.push('.' + $(this).find('input, select').attr('class'));
-      return oldRemove.call(this);
+    // Override the core detach method.
+    $.fn.detach = function() {
+      mockDetachData = $.map(this, function (element) {
+        return '.' + $(element).find('input, select').attr('class');
+      });
+      return oldDetach.call(this);
     };
 
     // Get the existing order of the locality fields.
@@ -472,12 +618,10 @@
     });
 
     deepEqual(newOrder, expectedOrder, 'Order of fields updated as expected.');
-    equal(mockCloneData.length, expectedOrder.length, 'Clone method called the correct number of times.');
-    deepEqual(mockCloneData, expectedOrder, 'Clone method called for each field in the expected order.');
-    equal(mockRemoveData.length, expectedOrder.length, 'Remove method called the correct number of times.');
-    deepEqual(mockRemoveData, expectedOrder, 'Remove method called for each field in the expected order.');
+    equal(mockDetachData.length, expectedOrder.length, 'Detach method called with the correct number of elements.');
+    deepEqual(mockDetachData, expectedOrder, 'Detach method called for each field in the expected order.');
 
-    expect(5 + Object.keys(expectedVals).length);
+    expect(3 + Object.keys(expectedVals).length);
   });
 
   module('jQuery#addressfield plugin behavior', {

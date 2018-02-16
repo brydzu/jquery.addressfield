@@ -28,6 +28,23 @@ in some other magical way):
 <script src="/path/to/jquery.addressfield.js"></script>
 ```
 
+Also available on NPM, for [browserified](http://browserify.org/) builds.
+
+Install into `node_modules`:
+
+```shell
+$ npm install jquery.addressfield
+```
+
+In your application module;
+
+```javascript
+var $ = require('jquery');
+require('jquery.addressfield');
+
+$(...).addressfield(...);
+```
+
 #### Basic usage
 Using jquery.addressfield is easy! Instantiate the plugin against a form or form
 wrapper with a few special configuration keys and the plugin takes care of the
@@ -57,6 +74,12 @@ Once instantiated, this plugin binds a change handler to the country element.
 The change handler will trigger a mutation process on the form that handles all
 of the features outlined above based on the configuration provided in the `json`
 key.
+
+#### Expected markup
+
+Note that this plugin makes certain assumptions about the structure of your form
+markup. Please be sure to see the [usage and configuration](docs/usage.md) guide
+for complete details.
 
 ### Detailed documentation
 More detailed, topic-based documentation on usage and configuration options is

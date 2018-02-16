@@ -4,9 +4,14 @@
  *
  * Licensed under the MIT license.
  */
-
-(function ($) {
-
+(function(factory) {
+  /* istanbul ignore next */
+  if (typeof module === "object" && typeof module.exports === "object") {
+    factory(require("jquery"));
+  } else {
+    factory(jQuery);
+  }
+}(function factory($) {
   /**
    * Modifies an address field for this wrapped set of fields, given a config
    * representing how the country writes its addresses (conforming roughly to
@@ -56,7 +61,8 @@
           async: true,
           // @deprecated Support for manual, synchronous, external control.
           defs: {fields: {}}
-        }, options);
+        }, options),
+        transformedData;
 
     // If a path was given for a JSON resource, load the resource and execute.
     if (typeof configs.json === 'string') {
@@ -65,7 +71,10 @@
         url: configs.json,
         async: configs.async,
         success: function (data) {
-          $.fn.addressfield.binder.call($container, configs.fields, $.fn.addressfield.transform(data));
+          transformedData = $.fn.addressfield.transform(data);
+
+          $.fn.addressfield.initCountries.call($container, configs.fields.country, transformedData);
+          $.fn.addressfield.binder.call($container, configs.fields, transformedData);
           $(configs.fields.country).change();
         }
       });
@@ -73,7 +82,10 @@
     }
     // In this case, a direct configuration has been provided inline.
     else if (typeof configs.json === 'object' && configs.json !== null) {
-      $.fn.addressfield.binder.call($container, configs.fields, $.fn.addressfield.transform(configs.json));
+      transformedData = $.fn.addressfield.transform(configs.json);
+
+      $.fn.addressfield.initCountries.call($container, configs.fields.country, transformedData);
+      $.fn.addressfield.binder.call($container, configs.fields, transformedData);
       $(configs.fields.country).change();
       return $container;
     }
@@ -179,6 +191,45 @@
   };
 
   /**
+  * Populates country dropdown with list of countries from provided json file if it is empty.
+  *
+  * @param selector
+  *   Field identifying the country dropdown from user-configs.
+  *
+  * @param countryMap
+  *   A map of country codes to country names.
+  */
+  $.fn.addressfield.initCountries = function(selector, countryMap) {
+    var $container = this,
+        $countrySelect = $container.find(selector + ':not(:has(>option))'),
+        defaultCountry;
+
+    if (!$countrySelect.length) {
+      return;
+    }
+    else {
+      defaultCountry = $countrySelect.attr('data-country-selected');
+    }
+
+    $.each(countryMap, function(key, value) {
+      if (typeof defaultCountry !== 'undefined' &&
+          key.toLowerCase() === defaultCountry.toLowerCase()) {
+        $countrySelect.append($('<option></option>')
+          .attr('value', key)
+          .attr('selected', 'selected')
+          .text(value.label)
+        );
+      }
+      else {
+        $countrySelect.append($('<option></option>')
+          .attr('value', key)
+          .text(value.label)
+        );
+      }
+    });
+  };
+
+  /**
    * Binds a handler to the country form field element, which applies postal
    * address form mutations to this form container based on the selected country
    * and given xNAL field map.
@@ -195,7 +246,7 @@
   $.fn.addressfield.binder = function(fieldMap, countryConfigMap) {
     var $container = this;
 
-    $(fieldMap.country).bind('change', function() {
+    $container.find(fieldMap.country).bind('change', function() {
       // Trigger the apply method with the country's data.
       $.fn.addressfield.apply.call($container, countryConfigMap[this.value], fieldMap);
     });
@@ -344,7 +395,8 @@
         // Create the validation method.
         $.validator.addMethod(methodName, function (value) {
           // @todo Drop jQuery 1.3 support. No need for .toString() call.
-          return new RegExp(config.format).test($.trim(value.toString()));
+          // Make validation case insenstitve.
+          return new RegExp(config.format, 'i').test($.trim(value.toString()));
         }, message);
 
         // Apply the rule.
@@ -425,36 +477,18 @@
    * order array is itself an array.
    */
   $.fn.addressfield.orderFields = function(order) {
-    var length = order.length,
-        i,
-        $element;
+    var $self = $(this),
+        // Create an empty jQuery object.
+        // @todo Remove .not(document) when dropping jQuery 1.3 support.
+        $orderedContainers = $().not(document);
 
-    // Iterate through the fields to be ordered.
-    for (i = 0; i < length; ++i) {
-      if (i in order) {
-        // Save off the element container over its class selector in order.
-        $element = $.fn.addressfield.container.call(this.find(order[i]));
-        order[i] = {
-          'element': $element.clone(),
-          'selector': order[i],
-          'value': $(this).find(order[i]).val()
-        };
+    // Form a jQuery object with container elements in the correct order.
+    $.each(order, function (index, selector) {
+      var $container = $.fn.addressfield.container.call($self.find(selector));
+      $orderedContainers.push($container[0]);
+    });
 
-        // Remove the original element from the page.
-        $element.remove();
-      }
-    }
-
-    // Elements have been saved off in order and removed. Now, add them back in
-    // the correct order.
-    for (i = 0; i < length; ++i) {
-      if (i in order) {
-        $element = $(this).append(order[i].element);
-
-        // The clone process doesn't seem to copy input values; apply that here.
-        $element.find(order[i]['selector']).val(order[i].value).change();
-      }
-    }
+    // Re-append to parent in the correct order.
+    $orderedContainers.detach().appendTo($self);
   };
-
-}(jQuery));
+}));
